@@ -19,7 +19,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 const imageInput = document.getElementById('images');
 const previewContainer = document.getElementById('preview-container');
 
-if (imageInput) {
+if (imageInput && previewContainer) {
     imageInput.addEventListener('change', (e) => {
         previewContainer.innerHTML = '';
         const files = Array.from(e.target.files).slice(0, 4);
@@ -41,6 +41,8 @@ if (imageInput) {
 }
 
 function removeImage(index) {
+    if (!imageInput) return;
+    
     const dt = new DataTransfer();
     const files = imageInput.files;
     
@@ -54,10 +56,20 @@ function removeImage(index) {
 
 // Generate image from text
 async function generateImage() {
-    const prompt = document.getElementById('prompt').value.trim();
-    const width = parseInt(document.getElementById('width').value);
-    const height = parseInt(document.getElementById('height').value);
-    const guidance = parseFloat(document.getElementById('guidance').value);
+    const promptEl = document.getElementById('prompt');
+    const widthEl = document.getElementById('width');
+    const heightEl = document.getElementById('height');
+    const guidanceEl = document.getElementById('guidance');
+    
+    if (!promptEl || !widthEl || !heightEl || !guidanceEl) {
+        showError('页面元素未正确加载');
+        return;
+    }
+    
+    const prompt = promptEl.value.trim();
+    const width = parseInt(widthEl.value);
+    const height = parseInt(heightEl.value);
+    const guidance = parseFloat(guidanceEl.value);
     
     if (!prompt) {
         showError('请输入提示词');
@@ -109,7 +121,14 @@ async function generateImage() {
 
 // Generate image with multiple references
 async function generateMultiRef() {
-    const prompt = document.getElementById('multi-prompt').value.trim();
+    const promptEl = document.getElementById('multi-prompt');
+    
+    if (!promptEl || !imageInput) {
+        showError('页面元素未正确加载');
+        return;
+    }
+    
+    const prompt = promptEl.value.trim();
     const files = imageInput.files;
     
     if (!prompt) {
@@ -176,7 +195,14 @@ async function generateMultiRef() {
 
 // Generate image with JSON control
 async function generateJSON() {
-    const jsonText = document.getElementById('json-prompt').value.trim();
+    const jsonPromptEl = document.getElementById('json-prompt');
+    
+    if (!jsonPromptEl) {
+        showError('页面元素未正确加载');
+        return;
+    }
+    
+    const jsonText = jsonPromptEl.value.trim();
     
     if (!jsonText) {
         showError('请输入 JSON 提示词');
@@ -239,34 +265,46 @@ let currentImageBlob = null;
 let currentImageUrl = null;
 
 function displayResult(blob) {
-    // Clean up previous URL if exists
-    if (currentImageUrl) {
-        URL.revokeObjectURL(currentImageUrl);
+    try {
+        // Clean up previous URL if exists
+        if (currentImageUrl) {
+            URL.revokeObjectURL(currentImageUrl);
+        }
+        
+        currentImageBlob = blob;
+        currentImageUrl = URL.createObjectURL(blob);
+        
+        const img = document.getElementById('output-image');
+        if (!img) {
+            showError('图片元素未找到');
+            return;
+        }
+        
+        // Add load event listener
+        img.onload = () => {
+            console.log('Image loaded successfully');
+            const resultEl = document.getElementById('result');
+            if (resultEl) {
+                resultEl.classList.remove('hidden');
+                // Scroll to result
+                setTimeout(() => {
+                    resultEl.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            }
+        };
+        
+        img.onerror = () => {
+            console.error('Failed to load image');
+            showError('图片加载失败，请重试');
+            hideLoading();
+        };
+        
+        // Set the image source
+        img.src = currentImageUrl;
+    } catch (error) {
+        console.error('Display error:', error);
+        showError('显示图片时出错：' + error.message);
     }
-    
-    currentImageBlob = blob;
-    currentImageUrl = URL.createObjectURL(blob);
-    
-    const img = document.getElementById('output-image');
-    
-    // Add load event listener
-    img.onload = () => {
-        console.log('Image loaded successfully');
-        document.getElementById('result').classList.remove('hidden');
-        // Scroll to result
-        setTimeout(() => {
-            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-    };
-    
-    img.onerror = () => {
-        console.error('Failed to load image');
-        showError('图片加载失败，请重试');
-        hideLoading();
-    };
-    
-    // Set the image source
-    img.src = currentImageUrl;
 }
 
 // Download image
@@ -276,47 +314,71 @@ function downloadImage() {
         return;
     }
     
-    const url = URL.createObjectURL(currentImageBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `flux-${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+        const url = URL.createObjectURL(currentImageBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `flux-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Download error:', error);
+        showError('下载失败：' + error.message);
+    }
 }
 
 // Reset form
 function resetForm() {
-    // Clean up blob URL
-    if (currentImageUrl) {
-        URL.revokeObjectURL(currentImageUrl);
-        currentImageUrl = null;
+    try {
+        // Clean up blob URL
+        if (currentImageUrl) {
+            URL.revokeObjectURL(currentImageUrl);
+            currentImageUrl = null;
+        }
+        
+        const resultEl = document.getElementById('result');
+        if (resultEl) {
+            resultEl.classList.add('hidden');
+        }
+        
+        currentImageBlob = null;
+        
+        // Clear the image
+        const img = document.getElementById('output-image');
+        if (img) {
+            img.src = '';
+        }
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+        console.error('Reset error:', error);
     }
-    
-    document.getElementById('result').classList.add('hidden');
-    currentImageBlob = null;
-    
-    // Clear the image
-    const img = document.getElementById('output-image');
-    img.src = '';
-    
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Show/hide loading
 function showLoading() {
-    document.getElementById('loading').classList.remove('hidden');
-    document.getElementById('result').classList.add('hidden');
+    const loadingEl = document.getElementById('loading');
+    const resultEl = document.getElementById('result');
+    
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (resultEl) resultEl.classList.add('hidden');
 }
 
 function hideLoading() {
-    document.getElementById('loading').classList.add('hidden');
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.classList.add('hidden');
 }
 
 // Show/hide error
 function showError(message) {
     const errorDiv = document.getElementById('error');
+    if (!errorDiv) {
+        console.error('Error div not found:', message);
+        return;
+    }
+    
     errorDiv.textContent = '❌ ' + message;
     errorDiv.classList.remove('hidden');
     
@@ -327,12 +389,28 @@ function showError(message) {
 }
 
 function hideError() {
-    document.getElementById('error').classList.add('hidden');
+    const errorDiv = document.getElementById('error');
+    if (errorDiv) {
+        errorDiv.classList.add('hidden');
+    }
 }
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {
     if (currentImageUrl) {
-        URL.revokeObjectURL(currentImageUrl);
+        try {
+            URL.revokeObjectURL(currentImageUrl);
+        } catch (error) {
+            console.error('Cleanup error:', error);
+        }
     }
 });
+
+// Initialize on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('FLUX.2 AI Image Generator initialized');
+    });
+} else {
+    console.log('FLUX.2 AI Image Generator initialized');
+}
