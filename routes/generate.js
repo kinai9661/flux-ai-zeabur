@@ -25,14 +25,30 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    console.log(`Generating image: "${prompt}"`);
+    console.log(`🎨 Generating image: "${prompt}" (${width}x${height})`);
     const imageBuffer = await generateImage(prompt, { width, height, guidance });
     
-    res.set('Content-Type', 'image/png');
+    // Validate buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Received empty image buffer from API');
+    }
+    
+    console.log(`✅ Image generated successfully (${imageBuffer.length} bytes)`);
+    
+    // Set proper headers
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': imageBuffer.length,
+      'Cache-Control': 'no-cache'
+    });
     res.send(imageBuffer);
   } catch (error) {
-    console.error('Generation error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Generation error:', error);
+    
+    // Make sure we send JSON error, not buffer
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
@@ -53,14 +69,30 @@ router.post('/generate/multi', upload.array('images', 4), async (req, res) => {
       return res.status(400).json({ error: 'Maximum 4 images allowed' });
     }
 
-    console.log(`Multi-ref generation with ${images.length} images: "${prompt}"`);
+    console.log(`🖼️ Multi-ref generation with ${images.length} images: "${prompt}"`);
     const imageBuffer = await generateWithMultiRef(prompt, images);
     
-    res.set('Content-Type', 'image/png');
+    // Validate buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Received empty image buffer from API');
+    }
+    
+    console.log(`✅ Multi-ref image generated successfully (${imageBuffer.length} bytes)`);
+    
+    // Set proper headers
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': imageBuffer.length,
+      'Cache-Control': 'no-cache'
+    });
     res.send(imageBuffer);
   } catch (error) {
-    console.error('Multi-ref generation error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ Multi-ref generation error:', error);
+    
+    // Make sure we send JSON error, not buffer
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
@@ -82,15 +114,42 @@ router.post('/generate/json', async (req, res) => {
       });
     }
 
-    console.log('JSON generation:', JSON.stringify(jsonPrompt));
+    console.log('⚙️ JSON generation:', JSON.stringify(jsonPrompt));
     const imageBuffer = await generateWithJSON(jsonPrompt);
     
-    res.set('Content-Type', 'image/png');
+    // Validate buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      throw new Error('Received empty image buffer from API');
+    }
+    
+    console.log(`✅ JSON image generated successfully (${imageBuffer.length} bytes)`);
+    
+    // Set proper headers
+    res.set({
+      'Content-Type': 'image/png',
+      'Content-Length': imageBuffer.length,
+      'Cache-Control': 'no-cache'
+    });
     res.send(imageBuffer);
   } catch (error) {
-    console.error('JSON generation error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('❌ JSON generation error:', error);
+    
+    // Make sure we send JSON error, not buffer
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
   }
+});
+
+// Multer error handling
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size too large (max 5MB)' });
+    }
+    return res.status(400).json({ error: error.message });
+  }
+  next(error);
 });
 
 module.exports = router;
