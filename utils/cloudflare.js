@@ -5,9 +5,52 @@ const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const MODEL_NAME = '@cf/black-forest-labs/flux-2-dev';
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
 if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
   console.error('⚠️  Missing Cloudflare credentials!');
   console.error('Please set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN in environment variables');
+}
+
+// Helper function for retry with exponential backoff
+async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // If rate limited (429) or capacity exceeded (3040), retry with exponential backoff
+      if ((response.status === 429 || response.status === 500) && i < retries) {
+        const errorText = await response.text();
+        
+        // Check if it's a capacity error
+        if (errorText.includes('Capacity temporarily exceeded') || errorText.includes('3040')) {
+          const delay = RETRY_DELAY * Math.pow(2, i);
+          console.log(`⏳ Capacity exceeded. Retrying in ${delay}ms... (attempt ${i + 1}/${retries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // Other 429 errors
+        if (response.status === 429) {
+          const delay = RETRY_DELAY * Math.pow(2, i);
+          console.log(`⏳ Rate limited. Retrying in ${delay}ms... (attempt ${i + 1}/${retries + 1})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+      }
+      
+      // If success or non-retryable error, return
+      return response;
+    } catch (error) {
+      if (i === retries) throw error;
+      
+      const delay = RETRY_DELAY * Math.pow(2, i);
+      console.log(`⚠️  Request failed. Retrying in ${delay}ms... (attempt ${i + 1}/${retries + 1})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
 }
 
 async function generateImage(prompt, options = {}) {
@@ -19,7 +62,7 @@ async function generateImage(prompt, options = {}) {
   if (options.guidance) form.append('guidance', options.guidance);
   if (options.num_steps) form.append('num_steps', options.num_steps);
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_NAME}`,
     {
       method: 'POST',
@@ -51,7 +94,7 @@ async function generateWithMultiRef(prompt, images) {
     });
   });
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_NAME}`,
     {
       method: 'POST',
@@ -76,7 +119,7 @@ async function generateWithJSON(jsonPrompt) {
   // Pass JSON as string in the prompt field
   form.append('prompt', JSON.stringify(jsonPrompt));
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${MODEL_NAME}`,
     {
       method: 'POST',
