@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const generateRoutes = require('./routes/generate');
 
@@ -11,8 +12,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
-app.get('/', (req, res) => {
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API Routes
+app.use('/api', generateRoutes);
+
+// Health check API
+app.get('/api/health', (req, res) => {
   res.json({
     status: 'active',
     service: 'FLUX.2 AI Image Generation API',
@@ -33,8 +40,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api', generateRoutes);
+// Serve index.html for root path
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // 404 handler
 app.use((req, res) => {
@@ -52,5 +61,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/`);
+  console.log(`🌐 Web UI: http://localhost:${PORT}/`);
+  console.log(`📍 Health check: http://localhost:${PORT}/api/health`);
 });
