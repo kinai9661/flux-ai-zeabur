@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLUX.2 AI 图像生成器</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎨 FLUX.2 AI 图像生成器</h1>
+            <p class="subtitle">基于 Cloudflare Workers AI 的智能图像生成</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="text">文本生成</button>
+            <button class="tab-btn" data-tab="multi">多图参考</button>
+            <button class="tab-btn" data-tab="json">JSON 控制</button>
+        </div>
+
+        <!-- Text to Image Tab -->
+        <div class="tab-content active" id="text-tab">
+            <div class="form-group">
+                <label for="prompt">输入提示词</label>
+                <textarea id="prompt" rows="4" placeholder="描述你想生成的图像，例如：一只可爱的猫咪在星空下漫步，8k 高清，电影级光影"></textarea>
+            </div>
+
+            <div class="settings-row">
+                <div class="form-group">
+                    <label for="width">宽度</label>
+                    <select id="width">
+                        <option value="512">512px</option>
+                        <option value="768">768px</option>
+                        <option value="1024" selected>1024px</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="height">高度</label>
+                    <select id="height">
+                        <option value="512">512px</option>
+                        <option value="768">768px</option>
+                        <option value="1024" selected>1024px</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="guidance">引导强度</label>
+                    <input type="number" id="guidance" value="3.5" min="1" max="10" step="0.5">
+                </div>
+            </div>
+
+            <button class="btn-primary" onclick="generateImage()">🚀 生成图像</button>
+        </div>
+
+        <!-- Multi Reference Tab -->
+        <div class="tab-content" id="multi-tab">
+            <div class="form-group">
+                <label for="multi-prompt">提示词（可引用图片）</label>
+                <textarea id="multi-prompt" rows="3" placeholder="例如：将图 1 的主体与图 0 的风格结合"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>上传参考图片（最多 4 张，每张 ≤ 512x512）</label>
+                <input type="file" id="images" accept="image/*" multiple>
+                <div id="preview-container" class="preview-grid"></div>
+            </div>
+
+            <button class="btn-primary" onclick="generateMultiRef()">🎨 生成图像</button>
+        </div>
+
+        <!-- JSON Control Tab -->
+        <div class="tab-content" id="json-tab">
+            <div class="form-group">
+                <label for="json-prompt">JSON 提示词</label>
+                <textarea id="json-prompt" rows="8" placeholder='{
+  "description": "modern website landing page",
+  "color_scheme": "#2ECC71",
+  "style": "minimalist",
+  "elements": ["header", "hero section", "features"]
+}'></textarea>
+            </div>
+
+            <button class="btn-primary" onclick="generateJSON()">⚙️ 生成图像</button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>正在生成图像，请稍候...</p>
+        </div>
+
+        <!-- Result Section -->
+        <div id="result" class="result hidden">
+            <h2>生成结果</h2>
+            <div class="result-image">
+                <img id="output-image" alt="Generated image">
+            </div>
+            <div class="result-actions">
+                <button class="btn-secondary" onclick="downloadImage()">💾 下载图像</button>
+                <button class="btn-secondary" onclick="resetForm()">🔄 重新生成</button>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error" class="error hidden"></div>
+
+        <footer>
+            <p>Powered by <a href="https://developers.cloudflare.com/workers-ai/" target="_blank">Cloudflare Workers AI</a> & <a href="https://zeabur.com" target="_blank">Zeabur</a></p>
+            <p class="model-info">Model: @cf/black-forest-labs/flux-2-dev</p>
+        </footer>
+    </div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
