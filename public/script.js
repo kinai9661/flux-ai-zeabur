@@ -19,24 +19,26 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 const imageInput = document.getElementById('images');
 const previewContainer = document.getElementById('preview-container');
 
-imageInput.addEventListener('change', (e) => {
-    previewContainer.innerHTML = '';
-    const files = Array.from(e.target.files).slice(0, 4);
-    
-    files.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const div = document.createElement('div');
-            div.className = 'preview-item';
-            div.innerHTML = `
-                <img src="${e.target.result}" alt="Preview ${index}">
-                <button class="remove-btn" onclick="removeImage(${index})">×</button>
-            `;
-            previewContainer.appendChild(div);
-        };
-        reader.readAsDataURL(file);
+if (imageInput) {
+    imageInput.addEventListener('change', (e) => {
+        previewContainer.innerHTML = '';
+        const files = Array.from(e.target.files).slice(0, 4);
+        
+        files.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'preview-item';
+                div.innerHTML = `
+                    <img src="${e.target.result}" alt="Preview ${index}">
+                    <button class="remove-btn" onclick="removeImage(${index})">×</button>
+                `;
+                previewContainer.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        });
     });
-});
+}
 
 function removeImage(index) {
     const dt = new DataTransfer();
@@ -75,13 +77,30 @@ async function generateImage() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || '生成失败');
+            let errorMsg = '生成失败';
+            try {
+                const error = await response.json();
+                errorMsg = error.error || errorMsg;
+            } catch (e) {
+                errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            throw new Error(errorMsg);
+        }
+        
+        // Check if response is actually an image
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+            throw new Error('返回的不是图片格式');
         }
         
         const blob = await response.blob();
+        if (blob.size === 0) {
+            throw new Error('返回的图片为空');
+        }
+        
         displayResult(blob);
     } catch (error) {
+        console.error('Generation error:', error);
         showError(error.message);
     } finally {
         hideLoading();
@@ -125,13 +144,30 @@ async function generateMultiRef() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || '生成失败');
+            let errorMsg = '生成失败';
+            try {
+                const error = await response.json();
+                errorMsg = error.error || errorMsg;
+            } catch (e) {
+                errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            throw new Error(errorMsg);
+        }
+        
+        // Check if response is actually an image
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+            throw new Error('返回的不是图片格式');
         }
         
         const blob = await response.blob();
+        if (blob.size === 0) {
+            throw new Error('返回的图片为空');
+        }
+        
         displayResult(blob);
     } catch (error) {
+        console.error('Multi-ref generation error:', error);
         showError(error.message);
     } finally {
         hideLoading();
@@ -168,13 +204,30 @@ async function generateJSON() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || '生成失败');
+            let errorMsg = '生成失败';
+            try {
+                const error = await response.json();
+                errorMsg = error.error || errorMsg;
+            } catch (e) {
+                errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            throw new Error(errorMsg);
+        }
+        
+        // Check if response is actually an image
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+            throw new Error('返回的不是图片格式');
         }
         
         const blob = await response.blob();
+        if (blob.size === 0) {
+            throw new Error('返回的图片为空');
+        }
+        
         displayResult(blob);
     } catch (error) {
+        console.error('JSON generation error:', error);
         showError(error.message);
     } finally {
         hideLoading();
@@ -183,23 +236,45 @@ async function generateJSON() {
 
 // Display result
 let currentImageBlob = null;
+let currentImageUrl = null;
 
 function displayResult(blob) {
+    // Clean up previous URL if exists
+    if (currentImageUrl) {
+        URL.revokeObjectURL(currentImageUrl);
+    }
+    
     currentImageBlob = blob;
-    const url = URL.createObjectURL(blob);
+    currentImageUrl = URL.createObjectURL(blob);
     
     const img = document.getElementById('output-image');
-    img.src = url;
     
-    document.getElementById('result').classList.remove('hidden');
+    // Add load event listener
+    img.onload = () => {
+        console.log('Image loaded successfully');
+        document.getElementById('result').classList.remove('hidden');
+        // Scroll to result
+        setTimeout(() => {
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    };
     
-    // Scroll to result
-    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+    img.onerror = () => {
+        console.error('Failed to load image');
+        showError('图片加载失败，请重试');
+        hideLoading();
+    };
+    
+    // Set the image source
+    img.src = currentImageUrl;
 }
 
 // Download image
 function downloadImage() {
-    if (!currentImageBlob) return;
+    if (!currentImageBlob) {
+        showError('没有可下载的图片');
+        return;
+    }
     
     const url = URL.createObjectURL(currentImageBlob);
     const a = document.createElement('a');
@@ -213,8 +288,19 @@ function downloadImage() {
 
 // Reset form
 function resetForm() {
+    // Clean up blob URL
+    if (currentImageUrl) {
+        URL.revokeObjectURL(currentImageUrl);
+        currentImageUrl = null;
+    }
+    
     document.getElementById('result').classList.add('hidden');
     currentImageBlob = null;
+    
+    // Clear the image
+    const img = document.getElementById('output-image');
+    img.src = '';
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -233,8 +319,20 @@ function showError(message) {
     const errorDiv = document.getElementById('error');
     errorDiv.textContent = '❌ ' + message;
     errorDiv.classList.remove('hidden');
+    
+    // Auto hide error after 5 seconds
+    setTimeout(() => {
+        hideError();
+    }, 5000);
 }
 
 function hideError() {
     document.getElementById('error').classList.add('hidden');
 }
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    if (currentImageUrl) {
+        URL.revokeObjectURL(currentImageUrl);
+    }
+});
