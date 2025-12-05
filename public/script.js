@@ -1,3 +1,18 @@
+// Suppress storage-related errors from extensions
+window.addEventListener('error', function(e) {
+    if (e.message && e.message.includes('storage')) {
+        e.preventDefault();
+        return true;
+    }
+}, true);
+
+window.addEventListener('unhandledrejection', function(e) {
+    if (e.reason && e.reason.message && e.reason.message.includes('storage')) {
+        e.preventDefault();
+        return true;
+    }
+});
+
 // Tab switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -11,7 +26,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-content').forEach(content => {
             content.classList.remove('active');
         });
-        document.getElementById(`${tabName}-tab`).classList.add('active');
+        const targetTab = document.getElementById(`${tabName}-tab`);
+        if (targetTab) targetTab.classList.add('active');
     });
 });
 
@@ -43,15 +59,19 @@ if (imageInput && previewContainer) {
 function removeImage(index) {
     if (!imageInput) return;
     
-    const dt = new DataTransfer();
-    const files = imageInput.files;
-    
-    for (let i = 0; i < files.length; i++) {
-        if (i !== index) dt.items.add(files[i]);
+    try {
+        const dt = new DataTransfer();
+        const files = imageInput.files;
+        
+        for (let i = 0; i < files.length; i++) {
+            if (i !== index) dt.items.add(files[i]);
+        }
+        
+        imageInput.files = dt.files;
+        imageInput.dispatchEvent(new Event('change'));
+    } catch (error) {
+        console.error('Remove image error:', error);
     }
-    
-    imageInput.files = dt.files;
-    imageInput.dispatchEvent(new Event('change'));
 }
 
 // Generate image from text
@@ -62,7 +82,7 @@ async function generateImage() {
     const guidanceEl = document.getElementById('guidance');
     
     if (!promptEl || !widthEl || !heightEl || !guidanceEl) {
-        showError('页面元素未正确加载');
+        showError('页面元素未正确加载，请刷新页面');
         return;
     }
     
@@ -90,10 +110,16 @@ async function generateImage() {
         
         if (!response.ok) {
             let errorMsg = '生成失败';
-            try {
-                const error = await response.json();
-                errorMsg = error.error || errorMsg;
-            } catch (e) {
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const error = await response.json();
+                    errorMsg = error.error || errorMsg;
+                } catch (e) {
+                    errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                }
+            } else {
                 errorMsg = `HTTP ${response.status}: ${response.statusText}`;
             }
             throw new Error(errorMsg);
@@ -102,19 +128,19 @@ async function generateImage() {
         // Check if response is actually an image
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.startsWith('image/')) {
-            throw new Error('返回的不是图片格式');
+            throw new Error('返回的不是图片格式，请重试');
         }
         
         const blob = await response.blob();
         if (blob.size === 0) {
-            throw new Error('返回的图片为空');
+            throw new Error('返回的图片为空，请重试');
         }
         
+        console.log(`Image blob received: ${blob.size} bytes, type: ${blob.type}`);
         displayResult(blob);
     } catch (error) {
         console.error('Generation error:', error);
-        showError(error.message);
-    } finally {
+        showError(error.message || '生成图像时出错，请重试');
         hideLoading();
     }
 }
@@ -124,7 +150,7 @@ async function generateMultiRef() {
     const promptEl = document.getElementById('multi-prompt');
     
     if (!promptEl || !imageInput) {
-        showError('页面元素未正确加载');
+        showError('页面元素未正确加载，请刷新页面');
         return;
     }
     
@@ -164,31 +190,36 @@ async function generateMultiRef() {
         
         if (!response.ok) {
             let errorMsg = '生成失败';
-            try {
-                const error = await response.json();
-                errorMsg = error.error || errorMsg;
-            } catch (e) {
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const error = await response.json();
+                    errorMsg = error.error || errorMsg;
+                } catch (e) {
+                    errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                }
+            } else {
                 errorMsg = `HTTP ${response.status}: ${response.statusText}`;
             }
             throw new Error(errorMsg);
         }
         
-        // Check if response is actually an image
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.startsWith('image/')) {
-            throw new Error('返回的不是图片格式');
+            throw new Error('返回的不是图片格式，请重试');
         }
         
         const blob = await response.blob();
         if (blob.size === 0) {
-            throw new Error('返回的图片为空');
+            throw new Error('返回的图片为空，请重试');
         }
         
+        console.log(`Multi-ref image blob received: ${blob.size} bytes`);
         displayResult(blob);
     } catch (error) {
         console.error('Multi-ref generation error:', error);
-        showError(error.message);
-    } finally {
+        showError(error.message || '生成图像时出错，请重试');
         hideLoading();
     }
 }
@@ -198,7 +229,7 @@ async function generateJSON() {
     const jsonPromptEl = document.getElementById('json-prompt');
     
     if (!jsonPromptEl) {
-        showError('页面元素未正确加载');
+        showError('页面元素未正确加载，请刷新页面');
         return;
     }
     
@@ -231,31 +262,36 @@ async function generateJSON() {
         
         if (!response.ok) {
             let errorMsg = '生成失败';
-            try {
-                const error = await response.json();
-                errorMsg = error.error || errorMsg;
-            } catch (e) {
+            const contentType = response.headers.get('content-type');
+            
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const error = await response.json();
+                    errorMsg = error.error || errorMsg;
+                } catch (e) {
+                    errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+                }
+            } else {
                 errorMsg = `HTTP ${response.status}: ${response.statusText}`;
             }
             throw new Error(errorMsg);
         }
         
-        // Check if response is actually an image
         const contentType = response.headers.get('content-type');
         if (!contentType || !contentType.startsWith('image/')) {
-            throw new Error('返回的不是图片格式');
+            throw new Error('返回的不是图片格式，请重试');
         }
         
         const blob = await response.blob();
         if (blob.size === 0) {
-            throw new Error('返回的图片为空');
+            throw new Error('返回的图片为空，请重试');
         }
         
+        console.log(`JSON image blob received: ${blob.size} bytes`);
         displayResult(blob);
     } catch (error) {
         console.error('JSON generation error:', error);
-        showError(error.message);
-    } finally {
+        showError(error.message || '生成图像时出错，请重试');
         hideLoading();
     }
 }
@@ -268,7 +304,11 @@ function displayResult(blob) {
     try {
         // Clean up previous URL if exists
         if (currentImageUrl) {
-            URL.revokeObjectURL(currentImageUrl);
+            try {
+                URL.revokeObjectURL(currentImageUrl);
+            } catch (e) {
+                console.warn('Failed to revoke previous URL:', e);
+            }
         }
         
         currentImageBlob = blob;
@@ -276,34 +316,54 @@ function displayResult(blob) {
         
         const img = document.getElementById('output-image');
         if (!img) {
-            showError('图片元素未找到');
+            showError('图片元素未找到，请刷新页面');
+            hideLoading();
             return;
         }
         
-        // Add load event listener
-        img.onload = () => {
-            console.log('Image loaded successfully');
+        // Remove previous event listeners
+        img.onload = null;
+        img.onerror = null;
+        
+        // Set up new event listeners
+        img.onload = function() {
+            console.log('✅ Image loaded successfully');
+            hideLoading();
+            
             const resultEl = document.getElementById('result');
             if (resultEl) {
                 resultEl.classList.remove('hidden');
-                // Scroll to result
+                // Scroll to result after a short delay
                 setTimeout(() => {
-                    resultEl.scrollIntoView({ behavior: 'smooth' });
+                    resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }, 100);
             }
         };
         
-        img.onerror = () => {
-            console.error('Failed to load image');
-            showError('图片加载失败，请重试');
+        img.onerror = function(e) {
+            console.error('❌ Failed to load image:', e);
             hideLoading();
+            showError('图片加载失败，请重试');
+            
+            // Clean up
+            if (currentImageUrl) {
+                try {
+                    URL.revokeObjectURL(currentImageUrl);
+                } catch (err) {
+                    console.warn('Failed to revoke URL:', err);
+                }
+                currentImageUrl = null;
+            }
         };
         
         // Set the image source
+        console.log('Setting image source:', currentImageUrl);
         img.src = currentImageUrl;
+        
     } catch (error) {
         console.error('Display error:', error);
         showError('显示图片时出错：' + error.message);
+        hideLoading();
     }
 }
 
@@ -318,11 +378,19 @@ function downloadImage() {
         const url = URL.createObjectURL(currentImageBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `flux-${Date.now()}.png`;
+        a.download = `flux-ai-${Date.now()}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        
+        // Clean up after download
+        setTimeout(() => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.warn('Failed to revoke download URL:', e);
+            }
+        }, 100);
     } catch (error) {
         console.error('Download error:', error);
         showError('下载失败：' + error.message);
@@ -334,7 +402,11 @@ function resetForm() {
     try {
         // Clean up blob URL
         if (currentImageUrl) {
-            URL.revokeObjectURL(currentImageUrl);
+            try {
+                URL.revokeObjectURL(currentImageUrl);
+            } catch (e) {
+                console.warn('Failed to revoke URL on reset:', e);
+            }
             currentImageUrl = null;
         }
         
@@ -348,9 +420,12 @@ function resetForm() {
         // Clear the image
         const img = document.getElementById('output-image');
         if (img) {
+            img.onload = null;
+            img.onerror = null;
             img.src = '';
         }
         
+        hideError();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
         console.error('Reset error:', error);
@@ -375,17 +450,18 @@ function hideLoading() {
 function showError(message) {
     const errorDiv = document.getElementById('error');
     if (!errorDiv) {
-        console.error('Error div not found:', message);
+        console.error('Error div not found. Message:', message);
+        alert(message); // Fallback to alert
         return;
     }
     
     errorDiv.textContent = '❌ ' + message;
     errorDiv.classList.remove('hidden');
     
-    // Auto hide error after 5 seconds
+    // Auto hide error after 8 seconds
     setTimeout(() => {
         hideError();
-    }, 5000);
+    }, 8000);
 }
 
 function hideError() {
@@ -401,7 +477,7 @@ window.addEventListener('beforeunload', () => {
         try {
             URL.revokeObjectURL(currentImageUrl);
         } catch (error) {
-            console.error('Cleanup error:', error);
+            console.warn('Cleanup error:', error);
         }
     }
 });
@@ -409,8 +485,8 @@ window.addEventListener('beforeunload', () => {
 // Initialize on DOM ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        console.log('FLUX.2 AI Image Generator initialized');
+        console.log('✅ FLUX.2 AI Image Generator initialized');
     });
 } else {
-    console.log('FLUX.2 AI Image Generator initialized');
+    console.log('✅ FLUX.2 AI Image Generator initialized');
 }
